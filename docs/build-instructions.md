@@ -66,8 +66,7 @@ npm run build:renderer
 # Test locally (requires display or Xvfb)
 npm start
 
-# Build .deb package
-chmod +x build-deb.sh
+# Build .deb package (if permission denied: chmod +x build-deb.sh)
 ./build-deb.sh
 # Output: build/lockedin-tasks-calendar_1.0.0_amd64.deb
 ```
