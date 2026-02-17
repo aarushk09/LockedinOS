@@ -1,0 +1,13 @@
+Package: lockedin-focus
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: bash, libnotify-bin
+Recommends: gnome-shell
+Maintainer: LockedinOS Contributors <lockedinos@protonmail.com>
+Description: LockedIn Focus Mode
+ A simple focus mode toggle for students. Enables Do Not Disturb
+ and blocks distracting websites via /etc/hosts.
+ Part of the LockedinOS distribution.
+Homepage: https://github.com/lockedinos/lockedinos

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=LockedinOS Setup Wizard
+Comment=First-boot setup for LockedinOS
+Exec=/usr/local/bin/lockedin-wizard
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Application

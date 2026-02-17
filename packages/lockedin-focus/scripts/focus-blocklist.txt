@@ -1,0 +1,37 @@
+# LockedIn Focus Mode — Default Website Blocklist
+# One domain per line. Lines starting with # are ignored.
+# Edit this file to customize which sites are blocked during focus mode.
+
+# Social Media
+facebook.com
+www.facebook.com
+twitter.com
+www.twitter.com
+x.com
+www.x.com
+instagram.com
+www.instagram.com
+tiktok.com
+www.tiktok.com
+reddit.com
+www.reddit.com
+snapchat.com
+www.snapchat.com
+
+# Streaming / Entertainment
+youtube.com
+www.youtube.com
+netflix.com
+www.netflix.com
+twitch.tv
+www.twitch.tv
+disneyplus.com
+www.disneyplus.com
+hulu.com
+www.hulu.com
+
+# News / Distraction
+buzzfeed.com
+www.buzzfeed.com
+9gag.com
+www.9gag.com

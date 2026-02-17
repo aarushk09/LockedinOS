@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# LockedIn Focus Mode — toggle Do Not Disturb + website blocking
+# Usage:
+#   lockedin-focus on        Enable focus mode
+#   lockedin-focus off       Disable focus mode
+#   lockedin-focus toggle    Toggle focus mode
+#   lockedin-focus status    Show current status
+#   lockedin-focus daemon    Run as a persistent daemon (for systemd)
+set -euo pipefail
+
+BLOCKLIST_FILE="/etc/lockedin/focus-blocklist.txt"
+HOSTS_BACKUP="/etc/lockedin/.hosts.backup"
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/lockedin-focus-state"
+LOCK_FILE="/tmp/lockedin-focus.lock"
+
+# Default blocklist if no custom file exists
+DEFAULT_BLOCKLIST=(
+  "facebook.com"
+  "www.facebook.com"
+  "twitter.com"
+  "www.twitter.com"
+  "x.com"
+  "www.x.com"
+  "instagram.com"
+  "www.instagram.com"
+  "tiktok.com"
+  "www.tiktok.com"
+  "reddit.com"
+  "www.reddit.com"
+  "youtube.com"
+  "www.youtube.com"
+  "netflix.com"
+  "www.netflix.com"
+  "twitch.tv"
+  "www.twitch.tv"
+)
+
+log() {
+  echo "[lockedin-focus] $*"
+}
+
+notify() {
+  if command -v notify-send &>/dev/null; then
+    notify-send --icon=dialog-information "LockedIn Focus" "$1" 2>/dev/null || true
+  fi
+}
+
+is_active() {
+  [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE" 2>/dev/null)" = "active" ]
+}
+
+enable_dnd() {
+  if command -v gsettings &>/dev/null; then
+    gsettings set org.gnome.desktop.notifications show-banners false 2>/dev/null || true
+  fi
+  if command -v gdbus &>/dev/null; then
+    gdbus call --session \
+      --dest org.gnome.Shell \
+      --object-path /org/gnome/Shell \
+      --method org.gnome.Shell.Eval \
+      "Main.panel.statusArea.dateMenu._indicator._settings.set_boolean('show-banners', false)" \
+      2>/dev/null || true
+  fi
+  log "Do Not Disturb enabled"
+}
+
+disable_dnd() {
+  if command -v gsettings &>/dev/null; then
+    gsettings set org.gnome.desktop.notifications show-banners true 2>/dev/null || true
+  fi
+  log "Do Not Disturb disabled"
+}
+
+get_blocklist() {
+  if [ -f "$BLOCKLIST_FILE" ]; then
+    grep -v '^#' "$BLOCKLIST_FILE" | grep -v '^$' || true
+  else
+    printf '%s\n' "${DEFAULT_BLOCKLIST[@]}"
+  fi
+}
+
+enable_webblock() {
+  if [ "$(id -u)" -ne 0 ]; then
+    log "Web blocking requires root. Attempting with pkexec..."
+    pkexec "$0" _apply_hosts on
+    return
+  fi
+  _apply_hosts on
+}
+
+disable_webblock() {
+  if [ "$(id -u)" -ne 0 ]; then
+    pkexec "$0" _apply_hosts off
+    return
+  fi
+  _apply_hosts off
+}
+
+_apply_hosts() {
+  local action="$1"
+  local hosts_file="/etc/hosts"
+  local marker_start="# >>> LOCKEDIN FOCUS MODE >>>"
+  local marker_end="# <<< LOCKEDIN FOCUS MODE <<<"
+
+  if [ "$action" = "on" ]; then
+    # Remove any existing focus block first
+    if grep -q "$marker_start" "$hosts_file" 2>/dev/null; then
+      sed -i "/$marker_start/,/$marker_end/d" "$hosts_file"
+    fi
+
+    # Append blocklist
+    echo "$marker_start" >> "$hosts_file"
+    while IFS= read -r domain; do
+      [ -z "$domain" ] && continue
+      echo "127.0.0.1 $domain" >> "$hosts_file"
+    done < <(get_blocklist)
+    echo "$marker_end" >> "$hosts_file"
+    log "Website blocking enabled ($(get_blocklist | wc -l) domains)"
+  elif [ "$action" = "off" ]; then
+    if grep -q "$marker_start" "$hosts_file" 2>/dev/null; then
+      sed -i "/$marker_start/,/$marker_end/d" "$hosts_file"
+      log "Website blocking disabled"
+    fi
+  fi
+}
+
+focus_on() {
+  if is_active; then
+    log "Focus mode is already active"
+    return 0
+  fi
+
+  log "Enabling focus mode..."
+  enable_dnd
+  enable_webblock
+  echo "active" > "$STATE_FILE"
+  notify "Focus mode ENABLED. Stay locked in!"
+  log "Focus mode is now ACTIVE"
+}
+
+focus_off() {
+  if ! is_active; then
+    log "Focus mode is already inactive"
+    return 0
+  fi
+
+  log "Disabling focus mode..."
+  disable_dnd
+  disable_webblock
+  echo "inactive" > "$STATE_FILE"
+  notify "Focus mode DISABLED. Take a break!"
+  log "Focus mode is now INACTIVE"
+}
+
+focus_toggle() {
+  if is_active; then
+    focus_off
+  else
+    focus_on
+  fi
+}
+
+focus_status() {
+  if is_active; then
+    echo "Focus mode: ACTIVE"
+    echo "DND: enabled"
+    if grep -q "LOCKEDIN FOCUS MODE" /etc/hosts 2>/dev/null; then
+      echo "Web blocking: enabled"
+    else
+      echo "Web blocking: disabled (requires root)"
+    fi
+  else
+    echo "Focus mode: INACTIVE"
+  fi
+}
+
+daemon_mode() {
+  log "Starting focus mode daemon..."
+  # Simple daemon: just keep running and handle signals
+  trap 'focus_off; exit 0' TERM INT
+  while true; do
+    sleep 60
+  done
+}
+
+# Main dispatch
+case "${1:-help}" in
+  on)       focus_on ;;
+  off)      focus_off ;;
+  toggle)   focus_toggle ;;
+  status)   focus_status ;;
+  daemon)   daemon_mode ;;
+  _apply_hosts)
+    shift
+    _apply_hosts "$@"
+    ;;
+  help|--help|-h)
+    echo "Usage: lockedin-focus {on|off|toggle|status|daemon}"
+    echo ""
+    echo "Commands:"
+    echo "  on       Enable focus mode (DND + web blocking)"
+    echo "  off      Disable focus mode"
+    echo "  toggle   Toggle focus mode on/off"
+    echo "  status   Show current focus mode status"
+    echo "  daemon   Run as a daemon (for systemd)"
+    echo ""
+    echo "Blocklist: $BLOCKLIST_FILE (one domain per line)"
+    ;;
+  *)
+    echo "Unknown command: $1"
+    echo "Run 'lockedin-focus help' for usage"
+    exit 1
+    ;;
+esac

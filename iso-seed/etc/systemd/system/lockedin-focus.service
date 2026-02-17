@@ -1,0 +1,12 @@
+[Unit]
+Description=LockedIn Focus Mode helper daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lockedin-focus daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

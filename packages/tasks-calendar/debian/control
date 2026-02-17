@@ -1,0 +1,12 @@
+Package: lockedin-tasks-calendar
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libsecret-1-0
+Maintainer: LockedinOS Contributors <lockedinos@protonmail.com>
+Description: LockedIn Tasks & Calendar
+ A student-focused productivity app with task management,
+ calendar views, priorities, tags, and SQLite-backed persistence.
+ Part of the LockedinOS distribution.
+Homepage: https://github.com/lockedinos/lockedinos

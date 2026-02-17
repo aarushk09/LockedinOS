@@ -1,0 +1,38 @@
+# Node
+node_modules/
+dist/
+out/
+*.tgz
+
+# Build artifacts
+*.iso
+*.deb
+*.snap
+build/
+release/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Cubic working dirs
+infra/cubic-work/
+
+# Temporary
+tmp/
+temp/

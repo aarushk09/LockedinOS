@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=LockedIn Tasks & Calendar
+Comment=Student-focused task manager and calendar
+Exec=/usr/bin/lockedin-tasks %U
+Icon=lockedin-tasks
+Terminal=false
+Type=Application
+Categories=Office;ProjectManagement;Calendar;
+Keywords=tasks;calendar;productivity;student;
+StartupWMClass=lockedin-tasks-calendar

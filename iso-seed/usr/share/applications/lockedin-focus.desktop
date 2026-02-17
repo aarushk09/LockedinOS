@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=LockedIn Focus Mode
+Comment=Toggle distraction-free focus mode
+Exec=/usr/local/bin/lockedin-focus toggle
+Icon=preferences-system-notifications
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=focus;dnd;block;productivity;

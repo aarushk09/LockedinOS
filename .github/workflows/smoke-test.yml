@@ -1,0 +1,57 @@
+name: Smoke Test
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build LockedinOS Packages"]
+    types: [completed]
+
+jobs:
+  smoke-test:
+    name: VM Smoke Test
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf
+
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lockedinos-iso
+          path: release/
+        continue-on-error: true
+
+      - name: Run smoke tests (script validation)
+        run: |
+          echo "==> Validating scripts..."
+          bash -n packages/lockedin-focus/scripts/lockedin-focus
+          bash -n infra/prepare-chroot.sh
+          bash -n infra/build-iso.sh
+          bash -n configs/gnome/apply-gsettings.sh
+          bash -n configs/installer/first-boot-wizard.sh
+          echo "==> All script validations passed"
+
+      - name: Run unit smoke test
+        run: |
+          chmod +x docs/smoke-test.sh
+          bash docs/smoke-test.sh --scripts-only
+
+      - name: Generate test report
+        run: |
+          cat > test-report.md << 'EOF'
+          # Smoke Test Report
+          
+          - Script validation: PASS
+          - Focus mode syntax: PASS
+          - Build scripts syntax: PASS
+          
+          ## Notes
+          Full VM boot test requires self-hosted runner with VirtualBox/QEMU.
+          See docs/qa-checklist.md for manual testing steps.
+          EOF
+          cat test-report.md
