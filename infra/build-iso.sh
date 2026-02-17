@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # LockedinOS — Automated ISO Build Script (Cubic-based)
-# Usage: sudo ./build-iso.sh /path/to/ubuntu-24.04-desktop-amd64.iso [output-dir]
+# Usage: sudo ./build-iso.sh /path/to/ubuntu-24.04.4-desktop-amd64.iso [output-dir]
 #
 # This script automates the Cubic workflow:
 # 1. Extracts the Ubuntu ISO
@@ -9,7 +9,7 @@
 # 4. Repacks into a new ISO
 # 5. Generates SHA256 checksum
 #
-# Requirements: cubic, xorriso, squashfs-tools, dpkg-deb, fakeroot
+# Requirements: xorriso, squashfs-tools, dpkg-deb, fakeroot (Cubic is optional for GUI use only)
 set -euo pipefail
 
 # ── Configuration ──
@@ -22,7 +22,7 @@ ISO_NAME="LockedinOS-v1.0.0-amd64"
 ISO_LABEL="LockedinOS v1"
 
 if [ -z "$SOURCE_ISO" ]; then
-  echo "Usage: sudo $0 /path/to/ubuntu-24.04-desktop-amd64.iso [output-dir]"
+  echo "Usage: sudo $0 /path/to/ubuntu-24.04.4-desktop-amd64.iso [output-dir]"
   echo ""
   echo "Download Ubuntu 24.04 LTS Desktop ISO from:"
   echo "  https://releases.ubuntu.com/24.04/"
@@ -51,7 +51,6 @@ echo ""
 echo "==> [1/8] Installing build dependencies..."
 apt-get update
 apt-get install -y \
-  cubic \
   xorriso \
   squashfs-tools \
   mtools \

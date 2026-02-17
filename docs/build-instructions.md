@@ -86,12 +86,13 @@ chmod +x build-deb.sh
 
 ```bash
 # Download Ubuntu 24.04 LTS Desktop ISO
-wget https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso \
-  -O /tmp/ubuntu-24.04-desktop-amd64.iso
+# (If 404, check https://releases.ubuntu.com/24.04/ for the latest point release filename)
+wget https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso \
+  -O /tmp/ubuntu-24.04.4-desktop-amd64.iso
 
 # Build LockedinOS ISO
 cd infra
-sudo ./build-iso.sh /tmp/ubuntu-24.04-desktop-amd64.iso
+sudo ./build-iso.sh /tmp/ubuntu-24.04.4-desktop-amd64.iso
 # Output: release/LockedinOS-v1.0.0-amd64.iso
 ```
 

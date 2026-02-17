@@ -53,7 +53,7 @@ npm run build
 
 ```bash
 cd infra
-sudo ./build-iso.sh /path/to/ubuntu-24.04-desktop-amd64.iso
+sudo ./build-iso.sh /path/to/ubuntu-24.04.4-desktop-amd64.iso
 ```
 
 See [docs/build-instructions.md](docs/build-instructions.md) for full details.

@@ -126,15 +126,15 @@ jobs:
 
       - name: Download Ubuntu ISO
         run: |
-          if [ ! -f /tmp/ubuntu-24.04-desktop-amd64.iso ]; then
-            wget -q https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso \
-              -O /tmp/ubuntu-24.04-desktop-amd64.iso
+          if [ ! -f /tmp/ubuntu-24.04.4-desktop-amd64.iso ]; then
+            wget -q https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso \
+              -O /tmp/ubuntu-24.04.4-desktop-amd64.iso
           fi
 
       - name: Build ISO
         run: |
           chmod +x infra/build-iso.sh
-          sudo ./infra/build-iso.sh /tmp/ubuntu-24.04-desktop-amd64.iso release/
+          sudo ./infra/build-iso.sh /tmp/ubuntu-24.04.4-desktop-amd64.iso release/
 
       - name: Upload ISO artifact
         uses: actions/upload-artifact@v4
