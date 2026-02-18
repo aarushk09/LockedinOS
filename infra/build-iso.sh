@@ -108,10 +108,33 @@ cp -a "$MOUNT_DIR"/.* "$EXTRACT_DIR/" 2>/dev/null || true
 umount "$MOUNT_DIR"
 rmdir "$MOUNT_DIR"
 
-# Find and extract squashfs
-SQUASHFS_FILE=$(find "$EXTRACT_DIR" -name "filesystem.squashfs" -type f | head -1)
+# Find and extract squashfs (Ubuntu 24.04+ may use filesystem.squashfs or main .squashfs in casper/)
+SQUASHFS_FILE=""
+for candidate in "${EXTRACT_DIR}/casper/filesystem.squashfs" "${EXTRACT_DIR}/live/filesystem.squashfs"; do
+  if [ -f "$candidate" ]; then
+    SQUASHFS_FILE="$candidate"
+    break
+  fi
+done
 if [ -z "$SQUASHFS_FILE" ]; then
-  echo "ERROR: filesystem.squashfs not found in ISO"
+  # Fallback: any filesystem.squashfs anywhere
+  SQUASHFS_FILE=$(find "$EXTRACT_DIR" -name "filesystem.squashfs" -type f 2>/dev/null | head -1)
+fi
+if [ -z "$SQUASHFS_FILE" ]; then
+  # Ubuntu 24.04+ split layout: use largest .squashfs that is not *.live.squashfs (main root)
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && SQUASHFS_FILE="$f" && break
+  done < <(find "$EXTRACT_DIR" -name "*.squashfs" -type f ! -name "*.live.squashfs" -printf '%s %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+fi
+if [ -z "$SQUASHFS_FILE" ] || [ ! -f "$SQUASHFS_FILE" ]; then
+  # Last resort: any .squashfs (e.g. single file)
+  SQUASHFS_FILE=$(find "$EXTRACT_DIR" -name "*.squashfs" -type f 2>/dev/null | head -1)
+fi
+if [ -z "$SQUASHFS_FILE" ] || [ ! -f "$SQUASHFS_FILE" ]; then
+  echo "ERROR: No squashfs found in ISO. Top-level contents:"
+  ls -la "$EXTRACT_DIR" 2>/dev/null || true
+  echo "All .squashfs files:"
+  find "$EXTRACT_DIR" -name "*.squashfs" -type f 2>/dev/null || true
   exit 1
 fi
 
