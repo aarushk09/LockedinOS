@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # LockedinOS — Automated ISO Build Script (Cubic-based)
-# Usage: sudo ./build-iso.sh /path/to/ubuntu-24.04.4-desktop-amd64.iso [output-dir]
+# Usage: sudo ./build-iso.sh /path/to/ubuntu.iso [output-dir]
 #
-# This script automates the Cubic workflow:
-# 1. Extracts the Ubuntu ISO
-# 2. Prepares a chroot environment
-# 3. Installs LockedinOS customizations
-# 4. Repacks into a new ISO
-# 5. Generates SHA256 checksum
+# When output-dir is given (e.g. /storage), the final ISO and all build
+# intermediates (extract, chroot) are stored there to avoid running out of space.
 #
-# Requirements: xorriso, squashfs-tools, dpkg-deb, fakeroot (Cubic is optional for GUI use only)
+# Example with 50GB /storage disk:
+#   sudo ./infra/build-iso.sh /storage/ubuntu.iso /storage
+#
 set -euo pipefail
 
 # ── Configuration ──
@@ -17,15 +15,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_ISO="${1:-}"
 OUTPUT_DIR="${2:-${REPO_ROOT}/release}"
-WORK_DIR="${SCRIPT_DIR}/cubic-work"
+# Put work dir on same filesystem as output when output-dir is explicit (saves space on repo disk)
+if [ -n "${2:-}" ]; then
+  WORK_DIR="${OUTPUT_DIR}/.lockedinos-build"
+else
+  WORK_DIR="${SCRIPT_DIR}/cubic-work"
+fi
 ISO_NAME="LockedinOS-v1.0.0-amd64"
 ISO_LABEL="LockedinOS v1"
 
 if [ -z "$SOURCE_ISO" ]; then
-  echo "Usage: sudo $0 /path/to/ubuntu-24.04.4-desktop-amd64.iso [output-dir]"
+  echo "Usage: sudo $0 /path/to/ubuntu.iso [output-dir]"
   echo ""
-  echo "Download Ubuntu 24.04 LTS Desktop ISO from:"
-  echo "  https://releases.ubuntu.com/24.04/"
+  echo "Examples:"
+  echo "  sudo $0 /tmp/ubuntu.iso"
+  echo "  sudo $0 /storage/ubuntu.iso /storage   # use /storage for ISO + build (needs ~15GB free)"
+  echo ""
+  echo "Download Ubuntu 24.04 LTS: https://releases.ubuntu.com/24.04/"
   exit 1
 fi
 
@@ -46,6 +52,8 @@ echo "Source ISO: $SOURCE_ISO"
 echo "Output dir: $OUTPUT_DIR"
 echo "Work dir:   $WORK_DIR"
 echo ""
+
+mkdir -p "$OUTPUT_DIR" "$WORK_DIR"
 
 # ── Step 1: Install build dependencies ──
 echo "==> [1/8] Installing build dependencies..."
