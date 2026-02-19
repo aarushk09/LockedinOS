@@ -261,13 +261,15 @@ if [ -n "$EFI_IMG" ]; then
   )
 fi
 
+# Write to stdout then to file to avoid xorriso "exceeds free space on media" bug
+# (xorriso miscalculates free space when writing directly to a file on large filesystems)
 xorriso -as mkisofs \
   -iso-level 3 \
   -full-iso9660-filenames \
   -volid "$VOLID" \
   "${XORRISO_EXTRA[@]}" \
-  -output "$ISO_PATH" \
-  "$EXTRACT_DIR"
+  -output - \
+  "$EXTRACT_DIR" > "$ISO_PATH"
 
 if [ ! -f "$ISO_PATH" ] || [ ! -s "$ISO_PATH" ]; then
   echo "ERROR: xorriso failed to create ISO"
