@@ -59,7 +59,8 @@ apt-get install -y \
   isolinux \
   syslinux-utils \
   fakeroot \
-  dpkg-dev
+  dpkg-dev \
+  genisoimage
 
 # ── Step 2: Build .deb packages ──
 echo ""
@@ -261,18 +262,47 @@ if [ -n "$EFI_IMG" ]; then
   )
 fi
 
-# Write to stdout then to file to avoid xorriso "exceeds free space on media" bug
-# (xorriso miscalculates free space when writing directly to a file on large filesystems)
-xorriso -as mkisofs \
-  -iso-level 3 \
-  -full-iso9660-filenames \
-  -volid "$VOLID" \
-  "${XORRISO_EXTRA[@]}" \
-  -output - \
-  "$EXTRACT_DIR" > "$ISO_PATH"
+# Create ISO: xorriso has a ~4GB "free space on media" bug; use genisoimage for large ISOs when available.
+CREATE_ISO() {
+  local ok=0
+  rm -f "$ISO_PATH"
 
-if [ ! -f "$ISO_PATH" ] || [ ! -s "$ISO_PATH" ]; then
-  echo "ERROR: xorriso failed to create ISO"
+  # Prefer genisoimage (no size limit); then xorriso with pre-allocated file
+  if command -v genisoimage &>/dev/null; then
+    echo "  Creating ISO with genisoimage..."
+    local geniso_args=(-o "$ISO_PATH" -iso-level 3 -full-iso9660-filenames -V "$VOLID" -r -J)
+    if [ -f "${EXTRACT_DIR}/isolinux/isolinux.bin" ]; then
+      geniso_args+=(-b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table)
+    fi
+    if [ -n "$EFI_IMG" ]; then
+      geniso_args+=(-eltorito-alt-boot -e "$EFI_IMG" -no-emul-boot)
+    fi
+    if genisoimage "${geniso_args[@]}" "$EXTRACT_DIR"; then
+      ok=1
+      command -v isohybrid &>/dev/null && isohybrid --uefi "$ISO_PATH" 2>/dev/null || true
+    fi
+  fi
+
+  if [ "$ok" -eq 0 ]; then
+    echo "  Creating ISO with xorriso (pre-allocating 10G to avoid size limit)..."
+    truncate -s 10G "$ISO_PATH" 2>/dev/null || true
+    if xorriso -as mkisofs \
+      -iso-level 3 \
+      -full-iso9660-filenames \
+      -volid "$VOLID" \
+      "${XORRISO_EXTRA[@]}" \
+      -output "$ISO_PATH" \
+      "$EXTRACT_DIR"; then
+      ok=1
+      # Note: with pre-allocate, the file may be 10GB on disk; the ISO content is smaller
+    fi
+  fi
+
+  return "$((1 - ok))"
+}
+
+if ! CREATE_ISO; then
+  echo "ERROR: Failed to create ISO. Install genisoimage: apt-get install genisoimage"
   exit 1
 fi
 
