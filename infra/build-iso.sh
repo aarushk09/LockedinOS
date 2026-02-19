@@ -201,45 +201,78 @@ mksquashfs "$CHROOT_DIR" "$SQUASHFS_FILE" \
   -comp xz -b 1M -Xdict-size 100% \
   -noappend
 
-# Update filesystem.size
-printf "%s" "$(du -sx --block-size=1 "$CHROOT_DIR" | cut -f1)" > \
-  "$(dirname "$SQUASHFS_FILE")/filesystem.size"
+# Update size file (casper expects filesystem.size or <name>.size for <name>.squashfs)
+SQUASHFS_DIR=$(dirname "$SQUASHFS_FILE")
+SQUASHFS_BASE=$(basename "$SQUASHFS_FILE" .squashfs)
+SIZE_BYTES=$(du -sx --block-size=1 "$CHROOT_DIR" | cut -f1)
+printf "%s" "$SIZE_BYTES" > "${SQUASHFS_DIR}/filesystem.size"
+printf "%s" "$SIZE_BYTES" > "${SQUASHFS_DIR}/${SQUASHFS_BASE}.size"
 
 # Update checksums
 cd "$EXTRACT_DIR"
 find . -type f -print0 | xargs -0 md5sum 2>/dev/null | \
   grep -v isolinux/boot.cat | grep -v md5sum.txt > md5sum.txt || true
 
-# Create ISO
+# Create ISO (detect boot layout: Ubuntu 24.04+ may not have boot/grub/efi.img or isolinux)
 mkdir -p "$OUTPUT_DIR"
 ISO_PATH="${OUTPUT_DIR}/${ISO_NAME}.iso"
+
+# ISO9660 volid: no spaces, prefer uppercase (max 32 chars)
+VOLID="LOCKEDINOS_V1"
+
+# Detect UEFI boot image (various Ubuntu layouts)
+EFI_IMG=""
+for p in boot/grub/efi.img boot/efi.img EFI/boot/bootx64.efi; do
+  if [ -f "${EXTRACT_DIR}/${p}" ]; then
+    EFI_IMG="$p"
+    echo "  Using UEFI boot: $p"
+    break
+  fi
+done
+if [ -z "$EFI_IMG" ]; then
+  # Fallback: first efi.img or bootx64.efi found (relative to EXTRACT_DIR)
+  FOUND=$(find "$EXTRACT_DIR" -type f \( -name "efi.img" -o -name "bootx64.efi" \) 2>/dev/null | head -1)
+  if [ -n "$FOUND" ]; then
+    EFI_IMG="${FOUND#${EXTRACT_DIR}/}"
+    echo "  Using UEFI boot: $EFI_IMG"
+  fi
+fi
+
+# Build xorriso args: legacy BIOS (isolinux) if present
+XORRISO_EXTRA=()
+if [ -f "${EXTRACT_DIR}/isolinux/isolinux.bin" ]; then
+  echo "  Using legacy BIOS boot: isolinux"
+  XORRISO_EXTRA+=(
+    -eltorito-boot isolinux/isolinux.bin
+    -no-emul-boot
+    -boot-load-size 4
+    -boot-info-table
+    --eltorito-catalog isolinux/boot.cat
+  )
+fi
+
+# Add UEFI boot only if we found an EFI image
+if [ -n "$EFI_IMG" ]; then
+  XORRISO_EXTRA+=(
+    -eltorito-alt-boot
+    -e "$EFI_IMG"
+    -no-emul-boot
+    -isohybrid-gpt-basdat
+  )
+fi
 
 xorriso -as mkisofs \
   -iso-level 3 \
   -full-iso9660-filenames \
-  -volid "$ISO_LABEL" \
-  -eltorito-boot isolinux/isolinux.bin \
-    -no-emul-boot \
-    -boot-load-size 4 \
-    -boot-info-table \
-    --eltorito-catalog isolinux/boot.cat \
-  -eltorito-alt-boot \
-    -e boot/grub/efi.img \
-    -no-emul-boot \
-    -isohybrid-gpt-basdat \
+  -volid "$VOLID" \
+  "${XORRISO_EXTRA[@]}" \
   -output "$ISO_PATH" \
-  "$EXTRACT_DIR" 2>/dev/null || {
-    # Fallback for Ubuntu ISOs without isolinux (newer UEFI-only ISOs)
-    xorriso -as mkisofs \
-      -iso-level 3 \
-      -full-iso9660-filenames \
-      -volid "$ISO_LABEL" \
-      -eltorito-alt-boot \
-        -e boot/grub/efi.img \
-        -no-emul-boot \
-      -output "$ISO_PATH" \
-      "$EXTRACT_DIR"
-  }
+  "$EXTRACT_DIR"
+
+if [ ! -f "$ISO_PATH" ] || [ ! -s "$ISO_PATH" ]; then
+  echo "ERROR: xorriso failed to create ISO"
+  exit 1
+fi
 
 # ── Step 8: Generate checksum and manifest ──
 echo ""
