@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=LockedIn Dashboard
+Comment=LockedinOS unified productivity dashboard
+Exec=/usr/bin/lockedin-dashboard %U
+Icon=preferences-desktop
+Terminal=false
+Type=Application
+Categories=Utility;System;
+Keywords=dashboard;tasks;focus;productivity;
+StartupWMClass=lockedin-dashboard

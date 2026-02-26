@@ -30,7 +30,7 @@ echo "==> GNOME defaults applied"
 # Set favorite apps via gsettings (for current user session)
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   gsettings set org.gnome.shell favorite-apps \
-    "['lockedin-tasks.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.TextEditor.desktop', 'lockedin-focus.desktop', 'org.gnome.Settings.desktop']" \
+    "['lockedin-dashboard.desktop', 'lockedin-tasks.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.TextEditor.desktop', 'lockedin-focus.desktop', 'org.gnome.Settings.desktop']" \
     2>/dev/null || true
   echo "==> Favorites set for current user"
 fi

@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-${REPO_ROOT}/release}"
-WORK_DIR="${SCRIPT_DIR}/live-build-work"
+WORK_DIR="/root/lockedinos-live-build-work"
 BUILD_DIR="${WORK_DIR}/lockedinos-live"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -19,16 +19,17 @@ echo "============================================"
 echo "  LockedinOS v1 — live-build ISO"
 echo "============================================"
 
-# ── Install live-build ──
-echo "==> Installing live-build..."
+# ── Install live-build and ISO tools ──
+echo "==> Installing live-build and ISO tools..."
 apt-get update
-apt-get install -y live-build debootstrap
+apt-get install -y live-build debootstrap syslinux-utils xorriso mtools grub-pc-bin grub-efi-amd64-bin
 
 # ── Prepare build directory ──
 echo "==> Preparing build directory..."
-rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
+# Clean broken chroot states but KEEP the apt cache to speed up the build
+lb clean || true
 
 # ── Configure live-build ──
 echo "==> Configuring live-build..."
@@ -36,14 +37,15 @@ lb config \
   --distribution noble \
   --archive-areas "main restricted universe multiverse" \
   --architectures amd64 \
-  --binary-images iso-hybrid \
+  --binary-images iso \
   --bootappend-live "boot=casper quiet splash" \
-  --debian-installer none \
+  --bootloader grub2 \
   --linux-flavours generic \
   --mode ubuntu \
   --iso-application "LockedinOS" \
   --iso-volume "LockedinOS v1" \
-  --iso-publisher "LockedinOS Contributors"
+  --iso-publisher "LockedinOS Contributors" \
+  --apt-secure false
 
 # ── Package lists ──
 echo "==> Creating package lists..."
@@ -76,16 +78,21 @@ htop
 neofetch
 unzip
 xdg-utils
+chromium-browser
+syslinux-utils
 EOF
 
-# ── Include .deb packages ──
-echo "==> Including custom .deb packages..."
-mkdir -p config/packages.chroot
+# ── Include custom .deb packages via hook ──
+echo "==> Staging custom .deb packages..."
+mkdir -p config/includes.chroot/tmp/lockedin-debs
 if [ -d "${REPO_ROOT}/packages/tasks-calendar/build" ]; then
-  cp "${REPO_ROOT}/packages/tasks-calendar/build/"*.deb config/packages.chroot/ 2>/dev/null || true
+  cp "${REPO_ROOT}/packages/tasks-calendar/build/"*.deb config/includes.chroot/tmp/lockedin-debs/ 2>/dev/null || true
 fi
 if [ -d "${REPO_ROOT}/packages/lockedin-focus/build" ]; then
-  cp "${REPO_ROOT}/packages/lockedin-focus/build/"*.deb config/packages.chroot/ 2>/dev/null || true
+  cp "${REPO_ROOT}/packages/lockedin-focus/build/"*.deb config/includes.chroot/tmp/lockedin-debs/ 2>/dev/null || true
+fi
+if [ -d "${REPO_ROOT}/packages/lockedin-dashboard/build" ]; then
+  cp "${REPO_ROOT}/packages/lockedin-dashboard/build/"*.deb config/includes.chroot/tmp/lockedin-debs/ 2>/dev/null || true
 fi
 
 # ── Include overlay files ──
@@ -133,6 +140,13 @@ cat > /etc/timeshift/timeshift.json << 'EOF'
 }
 EOF
 
+# Install custom packages manually to bypass unsigned local repo check
+if ls /tmp/lockedin-debs/*.deb 1> /dev/null 2>&1; then
+  apt-get update
+  apt-get install -y /tmp/lockedin-debs/*.deb
+  rm -rf /tmp/lockedin-debs
+fi
+
 # Update desktop database
 update-desktop-database /usr/share/applications 2>/dev/null || true
 HOOK
@@ -140,14 +154,17 @@ chmod 755 config/hooks/live/01-lockedin-setup.hook.chroot
 
 # ── Build ISO ──
 echo "==> Building ISO (this will take a while)..."
+export DEBOOTSTRAP_OPTIONS="--include=gnupg,gpg"
 lb build
 
 # ── Move output ──
-echo "==> Moving output..."
+echo "==> Converting raw ISO to Bootable Hybrid ISO with grub-mkrescue (this enables Rufus/USB boot)..."
 mkdir -p "$OUTPUT_DIR"
-ISO_FILE=$(find . -maxdepth 1 -name "*.iso" -type f | head -1)
-if [ -n "$ISO_FILE" ]; then
-  mv "$ISO_FILE" "${OUTPUT_DIR}/LockedinOS-v1.0.0-amd64.iso"
+# Output directly to Windows target directory to avoid WSL VHDX size limits / tmpfs memory exhaustion
+rm -f "${OUTPUT_DIR}/LockedinOS-v1.0.0-amd64.iso" || true
+grub-mkrescue -o "${OUTPUT_DIR}/LockedinOS-v1.0.0-amd64.iso" "$BUILD_DIR/binary"
+
+if [ -f "${OUTPUT_DIR}/LockedinOS-v1.0.0-amd64.iso" ]; then
   cd "$OUTPUT_DIR"
   sha256sum "LockedinOS-v1.0.0-amd64.iso" > "LockedinOS-v1.0.0-amd64.iso.sha256"
   echo ""
@@ -157,6 +174,6 @@ if [ -n "$ISO_FILE" ]; then
   echo "ISO: ${OUTPUT_DIR}/LockedinOS-v1.0.0-amd64.iso"
   echo "SHA256: $(cat LockedinOS-v1.0.0-amd64.iso.sha256)"
 else
-  echo "ERROR: No ISO file produced by live-build"
+  echo "ERROR: Failed to generate hybrid ISO with grub-mkrescue"
   exit 1
 fi
