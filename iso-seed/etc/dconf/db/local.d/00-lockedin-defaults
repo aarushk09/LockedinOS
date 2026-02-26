@@ -16,7 +16,7 @@ picture-options='zoom'
 primary-color='#0f0f14'
 
 [org/gnome/shell]
-favorite-apps=['lockedin-tasks.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.TextEditor.desktop', 'lockedin-focus.desktop', 'org.gnome.Settings.desktop']
+favorite-apps=['lockedin-dashboard.desktop', 'lockedin-tasks.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Terminal.desktop', 'org.gnome.TextEditor.desktop', 'lockedin-focus.desktop', 'org.gnome.Settings.desktop']
 welcome-dialog-last-shown-version='99.0'
 
 [org/gnome/desktop/notifications]

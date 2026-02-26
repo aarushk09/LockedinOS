@@ -35,13 +35,17 @@
   "build": {
     "appId": "org.lockedinos.dashboard",
     "productName": "LockedIn Dashboard",
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "package.json"
+    ],
     "linux": {
-      "target": ["deb"],
+      "target": [
+        "dir"
+      ],
       "category": "Utility",
       "icon": "assets/icon.png"
-    },
-    "deb": {
-      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils"]
     }
   }
 }
