@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-${REPO_ROOT}/release}"
+CLEAN_BUILD="${2:-}"
 WORK_DIR="/root/lockedinos-live-build-work"
 BUILD_DIR="${WORK_DIR}/lockedinos-live"
 
@@ -26,9 +27,15 @@ apt-get install -y live-build debootstrap syslinux-utils xorriso mtools grub-pc-
 
 # ── Prepare build directory ──
 echo "==> Preparing build directory..."
+
+if [ "$CLEAN_BUILD" = "--clean" ]; then
+  echo "==> CLEAN BUILD: Wiping previous live-build workspace..."
+  rm -rf "$WORK_DIR"
+fi
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
-# Clean broken chroot states but KEEP the apt cache to speed up the build
+# Clean broken chroot states but KEEP the apt cache to speed up the build (if not a hard wipe)
 lb clean || true
 
 # ── Configure live-build ──
@@ -116,18 +123,41 @@ cat > config/hooks/live/01-lockedin-setup.hook.chroot << 'HOOK'
 #!/bin/sh
 set -e
 
-# Apply dconf settings
+echo "==> LockedinOS chroot setup starting..."
+
+# ── Apply dconf settings ──
+# The overlay files (from iso-seed/) are already in place at this point.
+# We just need to ensure the profile exists and compile the database.
 mkdir -p /etc/dconf/profile
 cat > /etc/dconf/profile/user << 'EOF'
 user-db:user
 system-db:local
 EOF
 dconf update 2>/dev/null || true
+echo "==> dconf database compiled"
 
-# Add Flathub
+# ── Suppress GNOME initial setup wizard ──
+mkdir -p /etc/skel/.config
+echo "yes" > /etc/skel/.config/gnome-initial-setup-done
+
+# ── Disable ubuntu-dock extension (our dashboard replaces the dock) ──
+# This is a GNOME Shell extension that shows the favorites bar on the left/bottom
+# We disable it so our fullscreen dashboard is the only UI the user sees
+if [ -d /usr/share/gnome-shell/extensions/ubuntu-dock@ubuntu.com ]; then
+  echo "==> Disabling ubuntu-dock extension..."
+  mkdir -p /etc/dconf/db/local.d
+  cat >> /etc/dconf/db/local.d/00-lockedin-defaults << 'EOF'
+
+[org/gnome/shell]
+disabled-extensions=['ubuntu-dock@ubuntu.com']
+EOF
+  dconf update 2>/dev/null || true
+fi
+
+# ── Add Flathub ──
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
 
-# Configure Timeshift
+# ── Configure Timeshift ──
 mkdir -p /etc/timeshift
 cat > /etc/timeshift/timeshift.json << 'EOF'
 {
@@ -140,15 +170,23 @@ cat > /etc/timeshift/timeshift.json << 'EOF'
 }
 EOF
 
-# Install custom packages manually to bypass unsigned local repo check
+# ── Install custom .deb packages ──
+# Use --force-depends because some optional deps (like libsecret-1-0) may not
+# be available during chroot build but ARE available at runtime on the live ISO.
 if ls /tmp/lockedin-debs/*.deb 1> /dev/null 2>&1; then
-  apt-get update
-  apt-get install -y /tmp/lockedin-debs/*.deb
+  echo "==> Installing custom .deb packages..."
+  dpkg --force-depends -i /tmp/lockedin-debs/*.deb 2>&1 || true
+  apt-get install -f -y 2>&1 || true
   rm -rf /tmp/lockedin-debs
+  echo "==> Custom packages installed"
+else
+  echo "WARNING: No custom .deb packages found in /tmp/lockedin-debs/"
 fi
 
-# Update desktop database
+# ── Update desktop database ──
 update-desktop-database /usr/share/applications 2>/dev/null || true
+
+echo "==> LockedinOS chroot setup complete"
 HOOK
 chmod 755 config/hooks/live/01-lockedin-setup.hook.chroot
 

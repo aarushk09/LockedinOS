@@ -1,9 +1,10 @@
 [Desktop Entry]
 Name=LockedIn Dashboard
 Comment=LockedinOS unified productivity dashboard
-Exec=/usr/bin/lockedin-dashboard
+Exec=bash -c "sleep 3 && /usr/bin/lockedin-dashboard --no-sandbox"
 Icon=preferences-desktop
 Terminal=false
 Type=Application
 X-GNOME-Autostart-enabled=true
-X-GNOME-Autostart-Delay=2
+X-GNOME-Autostart-Phase=Application
+NoDisplay=true

@@ -30,7 +30,12 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
   }
 
-  mainWindow.maximize();
+  // Fullscreen mode — covers GNOME top panel and dock so our UI is the primary interface
+  if (process.env.NODE_ENV !== 'development') {
+    mainWindow.setFullScreen(true);
+  } else {
+    mainWindow.maximize();
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -40,6 +45,14 @@ function createWindow() {
 app.whenReady().then(() => {
   initDatabase();
   createWindow();
+
+  // F11 toggles fullscreen so user can access GNOME desktop if needed
+  const { globalShortcut } = require('electron');
+  globalShortcut.register('F11', () => {
+    if (mainWindow) {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    }
+  });
 });
 
 app.on('window-all-closed', () => {
