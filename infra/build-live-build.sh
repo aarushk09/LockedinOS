@@ -45,7 +45,7 @@ lb config \
   --archive-areas "main restricted universe multiverse" \
   --architectures amd64 \
   --binary-images iso \
-  --bootappend-live "boot=casper quiet splash session=lockedinos" \
+  --bootappend-live "boot=casper quiet splash" \
   --bootloader grub2 \
   --linux-flavours generic \
   --mode ubuntu \
@@ -58,11 +58,7 @@ lb config \
 echo "==> Creating package lists..."
 mkdir -p config/package-lists
 cat > config/package-lists/lockedinos.list.chroot << 'EOF'
-openbox
-policykit-1-gnome
-notification-daemon
-gnome-settings-daemon
-gnome-keyring
+gnome-shell
 gnome-control-center
 gnome-terminal
 gnome-text-editor
@@ -129,10 +125,9 @@ set -e
 
 echo "==> LockedinOS chroot setup starting..."
 
-# ── Make session script executable ──
-chmod 755 /usr/bin/lockedinos-session 2>/dev/null || true
-
 # ── Apply dconf settings ──
+# The overlay has our settings at /etc/dconf/db/local.d/00-lockedin-defaults
+# and the profile at /etc/dconf/profile/user. Compile the database.
 mkdir -p /etc/dconf/profile
 cat > /etc/dconf/profile/user << 'EOF'
 user-db:user
@@ -145,32 +140,15 @@ echo "==> dconf database compiled"
 mkdir -p /etc/skel/.config
 echo "yes" > /etc/skel/.config/gnome-initial-setup-done
 
-# ── Set LockedinOS as default session for the live user ──
-# Casper creates the 'ubuntu' user on boot. We pre-configure
-# AccountsService so GDM logs them into our custom session.
-mkdir -p /var/lib/AccountsService/users
-cat > /var/lib/AccountsService/users/ubuntu << 'EOF'
-[User]
-Session=lockedinos
-SystemAccount=false
-EOF
-
-# Also configure for any user created by the first-boot wizard
-for user in lockedin student; do
-  cat > /var/lib/AccountsService/users/$user << 'EOF'
-[User]
-Session=lockedinos
-SystemAccount=false
-EOF
-done
-
-# ── Configure GDM3 ──
+# ── Configure GDM3 for auto-login ──
+# Auto-login into the regular GNOME/ubuntu session.
+# Our GNOME Shell extension hides the panels, and our dashboard
+# autostarts fullscreen on top.
 mkdir -p /etc/gdm3
 cat > /etc/gdm3/custom.conf << 'EOF'
 [daemon]
 AutomaticLoginEnable=true
 AutomaticLogin=ubuntu
-DefaultSession=lockedinos.desktop
 WaylandEnable=false
 
 [security]
@@ -180,7 +158,17 @@ AllowRoot=false
 
 [chooser]
 EOF
-echo "==> GDM3 configured for auto-login into LockedinOS session"
+echo "==> GDM3 configured for auto-login"
+
+# ── Enable GNOME Shell extension system-wide ──
+# Our extension at /usr/share/gnome-shell/extensions/lockedinos-shell@lockedinos.org/
+# hides the top panel, dock, and Activities. It's enabled via dconf, but we also
+# need to make sure GNOME allows system extensions.
+if [ -d /usr/share/gnome-shell/extensions/lockedinos-shell@lockedinos.org ]; then
+  echo "==> LockedinOS Shell extension found and will be enabled via dconf"
+else
+  echo "WARNING: LockedinOS Shell extension not found!"
+fi
 
 # ── Add Flathub ──
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true

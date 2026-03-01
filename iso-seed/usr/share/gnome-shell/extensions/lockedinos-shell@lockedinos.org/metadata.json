@@ -1,0 +1,10 @@
+{
+    "uuid": "lockedinos-shell@lockedinos.org",
+    "name": "LockedinOS Shell",
+    "description": "Hides GNOME Shell UI elements so the LockedinOS dashboard is the primary interface",
+    "shell-version": [
+        "45",
+        "46"
+    ],
+    "version": 1
+}
