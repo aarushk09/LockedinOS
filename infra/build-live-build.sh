@@ -45,7 +45,7 @@ lb config \
   --archive-areas "main restricted universe multiverse" \
   --architectures amd64 \
   --binary-images iso \
-  --bootappend-live "boot=casper quiet splash" \
+  --bootappend-live "boot=casper quiet splash session=lockedinos" \
   --bootloader grub2 \
   --linux-flavours generic \
   --mode ubuntu \
@@ -58,9 +58,12 @@ lb config \
 echo "==> Creating package lists..."
 mkdir -p config/package-lists
 cat > config/package-lists/lockedinos.list.chroot << 'EOF'
-gnome-shell
+openbox
+policykit-1-gnome
+notification-daemon
+gnome-settings-daemon
+gnome-keyring
 gnome-control-center
-gnome-tweaks
 gnome-terminal
 gnome-text-editor
 nautilus
@@ -87,6 +90,7 @@ unzip
 xdg-utils
 chromium-browser
 syslinux-utils
+gdm3
 EOF
 
 # ── Include custom .deb packages via hook ──
@@ -125,9 +129,10 @@ set -e
 
 echo "==> LockedinOS chroot setup starting..."
 
+# ── Make session script executable ──
+chmod 755 /usr/bin/lockedinos-session 2>/dev/null || true
+
 # ── Apply dconf settings ──
-# The overlay files (from iso-seed/) are already in place at this point.
-# We just need to ensure the profile exists and compile the database.
 mkdir -p /etc/dconf/profile
 cat > /etc/dconf/profile/user << 'EOF'
 user-db:user
@@ -140,19 +145,42 @@ echo "==> dconf database compiled"
 mkdir -p /etc/skel/.config
 echo "yes" > /etc/skel/.config/gnome-initial-setup-done
 
-# ── Disable ubuntu-dock extension (our dashboard replaces the dock) ──
-# This is a GNOME Shell extension that shows the favorites bar on the left/bottom
-# We disable it so our fullscreen dashboard is the only UI the user sees
-if [ -d /usr/share/gnome-shell/extensions/ubuntu-dock@ubuntu.com ]; then
-  echo "==> Disabling ubuntu-dock extension..."
-  mkdir -p /etc/dconf/db/local.d
-  cat >> /etc/dconf/db/local.d/00-lockedin-defaults << 'EOF'
-
-[org/gnome/shell]
-disabled-extensions=['ubuntu-dock@ubuntu.com']
+# ── Set LockedinOS as default session for the live user ──
+# Casper creates the 'ubuntu' user on boot. We pre-configure
+# AccountsService so GDM logs them into our custom session.
+mkdir -p /var/lib/AccountsService/users
+cat > /var/lib/AccountsService/users/ubuntu << 'EOF'
+[User]
+Session=lockedinos
+SystemAccount=false
 EOF
-  dconf update 2>/dev/null || true
-fi
+
+# Also configure for any user created by the first-boot wizard
+for user in lockedin student; do
+  cat > /var/lib/AccountsService/users/$user << 'EOF'
+[User]
+Session=lockedinos
+SystemAccount=false
+EOF
+done
+
+# ── Configure GDM3 ──
+mkdir -p /etc/gdm3
+cat > /etc/gdm3/custom.conf << 'EOF'
+[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=ubuntu
+DefaultSession=lockedinos.desktop
+WaylandEnable=false
+
+[security]
+AllowRoot=false
+
+[greeter]
+
+[chooser]
+EOF
+echo "==> GDM3 configured for auto-login into LockedinOS session"
 
 # ── Add Flathub ──
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
@@ -171,8 +199,6 @@ cat > /etc/timeshift/timeshift.json << 'EOF'
 EOF
 
 # ── Install custom .deb packages ──
-# Use --force-depends because some optional deps (like libsecret-1-0) may not
-# be available during chroot build but ARE available at runtime on the live ISO.
 if ls /tmp/lockedin-debs/*.deb 1> /dev/null 2>&1; then
   echo "==> Installing custom .deb packages..."
   dpkg --force-depends -i /tmp/lockedin-debs/*.deb 2>&1 || true

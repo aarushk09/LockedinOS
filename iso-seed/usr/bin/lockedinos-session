@@ -1,0 +1,73 @@
+#!/bin/bash
+# LockedinOS Desktop Session
+# This replaces GNOME Shell — gnome-shell never starts.
+# We use openbox as a lightweight window manager (no panels, no dock) and
+# launch the LockedinOS dashboard as the sole desktop interface.
+
+set -e
+
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=LockedinOS
+export DESKTOP_SESSION=lockedinos
+
+# ── D-Bus ──
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+  eval "$(dbus-launch --sh-syntax)"
+  export DBUS_SESSION_BUS_ADDRESS
+fi
+dbus-update-activation-environment --systemd --all 2>/dev/null || true
+
+# ── GNOME Keyring (SSH keys, secrets, passwords) ──
+eval "$(gnome-keyring-daemon --start --components=pkcs11,secrets,ssh 2>/dev/null || true)"
+export SSH_AUTH_SOCK GNOME_KEYRING_CONTROL 2>/dev/null || true
+
+# ── Settings daemons (WiFi, audio, display brightness, power, keyboard) ──
+# These are the individual GNOME Settings Daemon components that provide
+# system functionality WITHOUT the GNOME Shell UI.
+for daemon in /usr/libexec/gsd-*; do
+  [ -x "$daemon" ] && "$daemon" &
+done
+
+# Fallback: try the older path used by some Ubuntu versions
+if [ ! -d /usr/libexec ] || [ -z "$(ls /usr/libexec/gsd-* 2>/dev/null)" ]; then
+  for daemon in /usr/lib/gnome-settings-daemon/gsd-*; do
+    [ -x "$daemon" ] && "$daemon" &
+  done
+fi
+
+# ── PulseAudio / PipeWire ──
+if command -v pipewire >/dev/null 2>&1; then
+  pipewire &
+  pipewire-pulse &
+elif command -v pulseaudio >/dev/null 2>&1; then
+  pulseaudio --start 2>/dev/null || true
+fi
+
+# ── PolicyKit agent (for password prompts when apps need root) ──
+if [ -x /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 ]; then
+  /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &
+fi
+
+# ── Apply dconf settings ──
+dconf update 2>/dev/null || true
+
+# ── Window Manager (openbox — lightweight, zero UI chrome) ──
+# openbox manages windows (move, resize, alt-tab) but shows NO panels,
+# NO dock, NO taskbar — our Electron dashboard provides all of that.
+if command -v openbox >/dev/null 2>&1; then
+  openbox --config-file /dev/null &
+else
+  # Fallback: use mutter standalone (GNOME's compositor without the shell)
+  mutter --replace --no-x11-display 2>/dev/null &
+fi
+
+# ── NetworkManager applet (system tray WiFi icon — optional) ──
+# Our dashboard handles WiFi via sidebar, but this is a safety net
+nm-applet --indicator 2>/dev/null &
+
+# ── Notification daemon ──
+/usr/lib/notification-daemon/notification-daemon 2>/dev/null &
+
+# ── LockedinOS Dashboard ──
+# This is the main and ONLY desktop interface. When it exits, the session ends.
+exec /usr/bin/lockedin-dashboard --no-sandbox
