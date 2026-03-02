@@ -1,6 +1,0 @@
-[Desktop Entry]
-Name=LockedinOS
-Comment=LockedinOS Custom Desktop Environment
-Exec=/usr/bin/lockedinos-session
-Type=Application
-DesktopNames=LockedinOS

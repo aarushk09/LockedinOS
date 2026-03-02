@@ -58,14 +58,15 @@ lb config \
 echo "==> Creating package lists..."
 mkdir -p config/package-lists
 cat > config/package-lists/lockedinos.list.chroot << 'EOF'
-gnome-shell
-gnome-control-center
-gnome-terminal
-gnome-text-editor
-nautilus
+lightdm
+openbox
+thunar
+xfce4-terminal
+policykit-1-gnome
+notification-daemon
+gnome-keyring
 timeshift
 flatpak
-gnome-software-plugin-flatpak
 sqlite3
 python3-venv
 curl
@@ -73,7 +74,6 @@ wget
 git
 zenity
 libnotify-bin
-dconf-cli
 network-manager
 network-manager-gnome
 pulseaudio
@@ -86,7 +86,6 @@ unzip
 xdg-utils
 chromium-browser
 syslinux-utils
-gdm3
 EOF
 
 # ── Include custom .deb packages via hook ──
@@ -125,50 +124,39 @@ set -e
 
 echo "==> LockedinOS chroot setup starting..."
 
-# ── Apply dconf settings ──
-# The overlay has our settings at /etc/dconf/db/local.d/00-lockedin-defaults
-# and the profile at /etc/dconf/profile/user. Compile the database.
-mkdir -p /etc/dconf/profile
-cat > /etc/dconf/profile/user << 'EOF'
-user-db:user
-system-db:local
+# ── Configure LightDM for Auto-Login ──
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat > /etc/lightdm/lightdm.conf.d/50-lockedinos.conf << 'EOF'
+[Seat:*]
+autologin-guest=false
+autologin-user=ubuntu
+autologin-user-timeout=0
+user-session=openbox
 EOF
-dconf update 2>/dev/null || true
-echo "==> dconf database compiled"
+echo "==> LightDM configured for auto-login"
 
-# ── Suppress GNOME initial setup wizard ──
-mkdir -p /etc/skel/.config
-echo "yes" > /etc/skel/.config/gnome-initial-setup-done
-
-# ── Configure GDM3 for auto-login ──
-# Auto-login into the regular GNOME/ubuntu session.
-# Our GNOME Shell extension hides the panels, and our dashboard
-# autostarts fullscreen on top.
-mkdir -p /etc/gdm3
-cat > /etc/gdm3/custom.conf << 'EOF'
-[daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=ubuntu
-WaylandEnable=false
-
-[security]
-AllowRoot=false
-
-[greeter]
-
-[chooser]
-EOF
-echo "==> GDM3 configured for auto-login"
-
-# ── Enable GNOME Shell extension system-wide ──
-# Our extension at /usr/share/gnome-shell/extensions/lockedinos-shell@lockedinos.org/
-# hides the top panel, dock, and Activities. It's enabled via dconf, but we also
-# need to make sure GNOME allows system extensions.
-if [ -d /usr/share/gnome-shell/extensions/lockedinos-shell@lockedinos.org ]; then
-  echo "==> LockedinOS Shell extension found and will be enabled via dconf"
-else
-  echo "WARNING: LockedinOS Shell extension not found!"
+# ── Configure Openbox Autostart ──
+# This script runs automatically when Openbox starts the session.
+mkdir -p /etc/xdg/openbox
+cat > /etc/xdg/openbox/autostart << 'EOF'
+# Start D-Bus session
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+  eval "$(dbus-launch --sh-syntax)"
+  export DBUS_SESSION_BUS_ADDRESS
 fi
+
+# Essential daemons
+eval "$(gnome-keyring-daemon --start --components=pkcs11,secrets,ssh 2>/dev/null)" &
+/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &
+/usr/lib/notification-daemon/notification-daemon &
+nm-applet &
+pulseaudio --start 2>/dev/null &
+
+# Launch LockedinOS Dashboard fullscreen as the primary interface
+/usr/bin/lockedin-dashboard --no-sandbox &
+EOF
+chmod 755 /etc/xdg/openbox/autostart
+echo "==> Openbox autostart configured"
 
 # ── Add Flathub ──
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
@@ -196,6 +184,10 @@ if ls /tmp/lockedin-debs/*.deb 1> /dev/null 2>&1; then
 else
   echo "WARNING: No custom .deb packages found in /tmp/lockedin-debs/"
 fi
+
+# ── Cleanup default desktop files (they show in menus unnecessarily) ──
+rm -f /usr/share/applications/openbox.desktop 2>/dev/null || true
+rm -f /usr/share/applications/obconf.desktop 2>/dev/null || true
 
 # ── Update desktop database ──
 update-desktop-database /usr/share/applications 2>/dev/null || true
