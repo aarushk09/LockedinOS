@@ -58,8 +58,11 @@ lb config \
 echo "==> Creating package lists..."
 mkdir -p config/package-lists
 cat > config/package-lists/lockedinos.list.chroot << 'EOF'
+xorg
+xserver-xorg
 lightdm
 openbox
+picom
 thunar
 xfce4-terminal
 policykit-1-gnome
@@ -125,15 +128,30 @@ set -e
 echo "==> LockedinOS chroot setup starting..."
 
 # ── Configure LightDM for Auto-Login ──
+# Casper (Ubuntu's live CD boot init) actively rewrites LightDM configs on boot
+# and hardcodes the session to 'ubuntu'. If 'ubuntu.desktop' doesn't exist,
+# LightDM aborts the autologin and dumps the user at the greeter (dotted screen).
+# We MUST spoof the 'ubuntu' session to trick Casper into loading Openbox.
 mkdir -p /etc/lightdm/lightdm.conf.d
 cat > /etc/lightdm/lightdm.conf.d/50-lockedinos.conf << 'EOF'
 [Seat:*]
 autologin-guest=false
 autologin-user=ubuntu
 autologin-user-timeout=0
-user-session=openbox
+user-session=ubuntu
 EOF
-echo "==> LightDM configured for auto-login"
+
+mkdir -p /usr/share/xsessions
+cat > /usr/share/xsessions/ubuntu.desktop << 'EOF'
+[Desktop Entry]
+Name=LockedinOS (Ubuntu Alias)
+Comment=Tricks Casper into loading our Openbox session
+Exec=/usr/bin/openbox-session
+Type=Application
+EOF
+cp /usr/share/xsessions/ubuntu.desktop /usr/share/xsessions/lockedinos.desktop
+cp /usr/share/xsessions/ubuntu.desktop /usr/share/xsessions/default.desktop
+echo "==> LightDM configured with spoofed ubuntu session for Casper compatibility"
 
 # ── Configure Openbox Autostart ──
 # This script runs automatically when Openbox starts the session.
@@ -151,6 +169,12 @@ eval "$(gnome-keyring-daemon --start --components=pkcs11,secrets,ssh 2>/dev/null
 /usr/lib/notification-daemon/notification-daemon &
 nm-applet &
 pulseaudio --start 2>/dev/null &
+
+# Compositor (CRITICAL for Electron transparency / glassmorphism)
+picom -b --backend glx --vsync
+
+# Set a solid dark background just in case
+xsetroot -solid "#0b1117"
 
 # Launch LockedinOS Dashboard fullscreen as the primary interface
 /usr/bin/lockedin-dashboard --no-sandbox &
